@@ -3,6 +3,7 @@ from models.schemas import InteractionCreate, InteractionUpdate, SuccessResponse
 from uuid import UUID
 from utils import success_response, ERROR_RESPONSES
 import services.interactions as interaction_service
+import services.ai_scoring as ai_scoring_service
 
 router = APIRouter(prefix="/interactions", tags=["Interactions"])
 
@@ -33,3 +34,10 @@ def update_interaction(interaction_id: UUID, interaction: InteractionUpdate):
 def delete_interaction(interaction_id: UUID):
     interaction_service.delete(str(interaction_id))
     return success_response({"message": "Interaction deleted"})
+
+
+@router.post("/{interaction_id}/close", response_model=SuccessResponse, responses=ERROR_RESPONSES)
+def close_interaction(interaction_id: UUID):
+    interaction_service.update(str(interaction_id), {"status": "answered"})
+    score = ai_scoring_service.analyze_interaction(str(interaction_id))
+    return success_response({"message": "Sesión cerrada y analizada", "score": score})
