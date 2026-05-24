@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# IDEs
+.vscode/
+.idea/
+
+# Claude
+.claude/
+
+# Anti
+.antigravitycli
+
+# Base de datos local
+*.db
+
+# OS
+.DS_Store
+Thumbs.db
