@@ -1,28 +1,39 @@
 import json
 
 
+def _unwrap(value):
+    """Si viene envuelto como {"array": [...]} (formato de Make), saca la lista."""
+    if isinstance(value, dict) and isinstance(value.get("array"), list):
+        return value["array"]
+    return value
+
+
 def _to_list(raw) -> list:
     """
     Convierte el raw transcript a una lista de dicts sin importar el formato:
-      1. Ya es una lista                      → se usa directo
-      2. String JSON con array   "[{...}]"    → json.loads
-      3. String JSON sin array   "{...},{...}"→ se envuelve en [] y se parsea
-      4. Doble serialización     "\"[{...}]\"" → dos json.loads
+      1. Ya es una lista                          → se usa directo
+      2. Objeto Make    {"array": [...]}          → se saca el array
+      3. String JSON con array   "[{...}]"        → json.loads
+      4. String Make    "{\"array\":[...]}"       → json.loads + sacar array
+      5. String JSON sin array   "{...},{...}"    → se envuelve en [] y se parsea
+      6. Doble serialización     "\"[{...}]\""    → dos json.loads
     """
+    raw = _unwrap(raw)
     if isinstance(raw, list):
         return raw
 
     if not isinstance(raw, str) or not raw.strip():
         return []
 
-    # Intento 1: parseo directo (cubre casos 2 y 4)
+    # Intento 1: parseo directo (cubre casos 3, 4 y 6)
     try:
         parsed = json.loads(raw)
+        parsed = _unwrap(parsed)
         if isinstance(parsed, list):
             return parsed
         if isinstance(parsed, str):
             # Doble serialización — un parse más
-            parsed = json.loads(parsed)
+            parsed = _unwrap(json.loads(parsed))
             if isinstance(parsed, list):
                 return parsed
     except (json.JSONDecodeError, ValueError):

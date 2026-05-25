@@ -6,7 +6,7 @@ def get_by_interaction(interaction_id: str):
     """Scores de una interacción con su detalle anidado (FK: interaction_scores.interaction_id)."""
     return (
         supabase.table("interaction_scores")
-        .select("*, interactions(*, campaigns(*), personas(*))")
+        .select("*, interactions(*, campaigns(*))")
         .eq("interaction_id", interaction_id)
         .execute()
         .data

@@ -88,27 +88,6 @@ class CompanyResponse(CompanyCreate):
     id: UUID
     created_at: datetime
 
-# --- PERSONAS ---
-class PersonaCreate(BaseModel):
-    name: str
-    fake_company: Optional[str] = None
-    role: Optional[str] = None
-    voice_id: Optional[str] = None
-    script_template: Optional[str] = None
-    channel: Optional[str] = None
-
-class PersonaUpdate(BaseModel):
-    name: Optional[str] = None
-    fake_company: Optional[str] = None
-    role: Optional[str] = None
-    voice_id: Optional[str] = None
-    script_template: Optional[str] = None
-    channel: Optional[str] = None
-
-class PersonaResponse(PersonaCreate):
-    id: UUID
-    created_at: datetime
-
 # --- CAMPAIGNS ---
 class CampaignCreate(BaseModel):
     company_id: UUID
@@ -146,13 +125,11 @@ class CampaignResponse(CampaignCreate):
 # --- INTERACTIONS ---
 class InteractionCreate(BaseModel):
     campaign_id: UUID
-    persona_id: Optional[UUID] = None
     channel: Optional[Literal["call", "whatsapp", "email"]] = None
     status: Optional[Literal["sent", "answered", "no_answer"]] = "sent"
     external_id: Optional[str] = None
 
 class InteractionUpdate(BaseModel):
-    persona_id: Optional[UUID] = None
     channel: Optional[Literal["call", "whatsapp", "email"]] = None
     status: Optional[Literal["sent", "answered", "no_answer"]] = None
     external_id: Optional[str] = None
@@ -209,6 +186,7 @@ class InteractionScoreCreate(BaseModel):
     used_name: Optional[bool] = False
     attempted_close: Optional[bool] = False
     quality_score: Optional[int] = Field(None, ge=0, le=100)
+    reasoning: Optional[str] = None
     scored_by: Optional[str] = None
 
 class InteractionScoreUpdate(BaseModel):

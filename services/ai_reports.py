@@ -10,11 +10,13 @@ _MODEL = "llama-3.3-70b-versatile"
 
 _SYSTEM_PROMPT = """Eres un consultor experto en mystery shopping para inmobiliarias.
 Se te darán métricas de una campaña de evaluación de atención al cliente.
-Genera un análisis profesional en español.
+Genera un análisis profesional en español, claro y accionable.
 
 Devuelve ÚNICAMENTE este JSON:
 {
   "findings": {
+    "veredicto": string (UNA sola línea, contundente, para encabezado de dashboard),
+    "oportunidad_principal": string (la mejora #1 con mayor impacto),
     "resumen": string,
     "fortalezas": [string],
     "debilidades": [string]
@@ -24,6 +26,21 @@ Devuelve ÚNICAMENTE este JSON:
     "secundarias": [string]
   }
 }"""
+
+
+def _grade(score) -> str:
+    """Convierte el score promedio en una calificación con letra (en código, sin IA)."""
+    if score is None:
+        return "N/A"
+    if score >= 90:
+        return "A"
+    if score >= 80:
+        return "B"
+    if score >= 70:
+        return "C"
+    if score >= 60:
+        return "D"
+    return "F"
 
 
 def _calculate_metrics(scores: list) -> dict:
@@ -112,6 +129,7 @@ def generate_report(campaign_id: str) -> dict:
         )
 
     metrics = _calculate_metrics(scores)
+    metrics["calificacion"] = _grade(metrics.get("avg_quality_score"))
     summary_text = _build_summary_text(metrics, campaign)
 
     chat_response = _client.chat.completions.create(

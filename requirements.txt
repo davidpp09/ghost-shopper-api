@@ -4,3 +4,6 @@ supabase
 pydantic[email]
 python-dotenv
 groq
+httpx
+elevenlabs
+apscheduler

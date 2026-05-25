@@ -19,11 +19,10 @@ def get_by_id(campaign_id: str):
     Relaciones usadas:
       - campaigns.company_id → companies.id
       - interactions.campaign_id → campaigns.id
-      - interactions.persona_id → personas.id
     """
     response = (
         supabase.table("campaigns")
-        .select("*, companies(*), interactions(*, personas(*))")
+        .select("*, companies(*), interactions(*)")
         .eq("id", campaign_id)
         .execute()
     )

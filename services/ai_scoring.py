@@ -7,14 +7,58 @@ from groq import Groq
 from db import supabase
 from parsers.transcript import parse_transcript
 
-_SLOW_RESPONSE_THRESHOLD_SEC = 4 * 60 * 60  # 4 horas
+_WHATSAPP_TIMEOUT_SEC = 4 * 60 * 60  # 4 horas sin respuesta = sesión finalizada
+
+# Los datos llegan con roles distintos según el canal:
+#   - llamadas (ElevenLabs): "agent" / "user"
+#   - whatsapp (Make):       "bot"   / "human"
+# Normalizamos a dos roles claros para no confundir la lógica ni a la IA.
+_SHOPPER_ROLES = {"agent", "bot"}    # NUESTRO cliente incógnito (el que evalúa)
+_COMPANY_ROLES = {"user", "human"}   # la EMPRESA evaluada (la que responde)
+
+_ROLE_LABEL = {
+    "shopper": "CLIENTE",   # nuestro cliente incógnito
+    "company": "EMPRESA",   # la empresa que estamos evaluando
+    "unknown": "DESCONOCIDO",
+}
+
+# Frases con las que NUESTRO shopper cierra la conversación (detección sin IA)
+_FAREWELL_KEYWORDS = [
+    "adiós", "adios", "hasta luego", "nos vemos", "que esté bien", "que estes bien",
+    "lo voy a pensar", "lo pensaré", "lo pensare", "lo tengo que pensar",
+    "no me interesa", "no es para mí", "no es para mi", "no es la opción",
+    "no es la opcion", "gracias por tu tiempo", "gracias por la información",
+    "gracias por la informacion", "gracias por la honestidad",
+]
+
+
+def _normalize_role(role) -> str:
+    """Mapea cualquier rol (agent/bot/user/human) a 'shopper' o 'company'."""
+    r = (role or "").strip().lower()
+    if r in _SHOPPER_ROLES:
+        return "shopper"
+    if r in _COMPANY_ROLES:
+        return "company"
+    return "unknown"
+
 
 _client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
 _MODEL = "llama-3.3-70b-versatile"
 
 _SYSTEM_PROMPT = """Eres un evaluador de mystery shopping (cliente incógnito).
-Analiza la conversación y evalúa qué tan bien atendió la empresa al cliente potencial.
+En la conversación hay dos participantes:
+  - CLIENTE  = nuestro cliente incógnito (el comprador potencial que hace preguntas).
+  - EMPRESA  = la empresa inmobiliaria que estamos evaluando (la que atiende).
+
+Evalúa ÚNICAMENTE qué tan bien atendió la EMPRESA al CLIENTE.
 El quality_score ya tiene penalizaciones por tiempo de respuesta aplicadas — no las recalcules.
+
+Criterios (todos sobre la EMPRESA):
+  - responded: ¿la EMPRESA respondió al cliente?
+  - gave_price: ¿la EMPRESA dio precio o rango de precio?
+  - did_followup: ¿la EMPRESA hizo seguimiento o preguntó para continuar?
+  - used_name: ¿la EMPRESA usó el nombre del cliente?
+  - attempted_close: ¿la EMPRESA intentó cerrar/agendar (cita, visita, siguiente paso)?
 
 Devuelve ÚNICAMENTE este JSON:
 {
@@ -36,8 +80,8 @@ def _build_transcript_text(interaction: dict) -> str:
     for cd in call_details:
         transcript = parse_transcript(cd.get("transcript"))
         for turn in transcript:
-                role = turn.get("role", "unknown").upper()
-                msg = turn.get("message", "").strip()
+                role = _ROLE_LABEL[_normalize_role(turn.get("role"))]
+                msg = (turn.get("message") or "").strip()
                 if msg:
                     lines.append(f"[{role}]: {msg}")
         duration = cd.get("duration_sec")
@@ -47,8 +91,8 @@ def _build_transcript_text(interaction: dict) -> str:
 
     messages = interaction.get("messages") or []
     for msg in sorted(messages, key=lambda m: m.get("sent_at", "")):
-        role = msg.get("role", "unknown").upper()
-        content = msg.get("content", "").strip()
+        role = _ROLE_LABEL[_normalize_role(msg.get("role"))]
+        content = (msg.get("content") or "").strip()
         if content:
             lines.append(f"[{role}]: {content}")
 
@@ -56,16 +100,8 @@ def _build_transcript_text(interaction: dict) -> str:
 
 
 def _build_context_text(interaction: dict) -> str:
-    """Construye contexto de campaña y persona para el prompt."""
+    """Construye contexto de campaña para el prompt."""
     parts = []
-
-    persona = interaction.get("personas") or {}
-    if persona:
-        parts.append(
-            f"Persona usada: {persona.get('name')} "
-            f"(empresa ficticia: {persona.get('fake_company')}, "
-            f"rol: {persona.get('role')})"
-        )
 
     campaign = interaction.get("campaigns") or {}
     if campaign:
@@ -108,15 +144,17 @@ def _build_timing_context(messages: list) -> tuple[str, int]:
 
     sorted_msgs = sorted(messages, key=lambda m: m.get("sent_at", ""))
 
+    # Medimos cuánto tarda la EMPRESA en responderle a NUESTRO shopper:
+    # por cada mensaje del shopper, buscamos la siguiente respuesta de la empresa.
     gaps = []
     for i, msg in enumerate(sorted_msgs):
-        if msg.get("role") != "agent":
+        if _normalize_role(msg.get("role")) != "shopper":
             continue
         ts_sent = _parse_ts(msg.get("sent_at", ""))
         if not ts_sent:
             continue
         for next_msg in sorted_msgs[i + 1:]:
-            if next_msg.get("role") == "user":
+            if _normalize_role(next_msg.get("role")) == "company":
                 ts_reply = _parse_ts(next_msg.get("sent_at", ""))
                 if ts_reply:
                     gaps.append((ts_reply - ts_sent).total_seconds())
@@ -153,7 +191,7 @@ def analyze_interaction(interaction_id: str) -> dict:
     try:
         response = (
             supabase.table("interactions")
-            .select("*, campaigns(*, companies(*)), personas(*)")
+            .select("*, campaigns(*, companies(*))")
             .eq("id", interaction_id)
             .execute()
         )
@@ -230,6 +268,7 @@ def analyze_interaction(interaction_id: str) -> dict:
         "used_name": result.get("used_name", False),
         "attempted_close": result.get("attempted_close", False),
         "quality_score": final_score,
+        "reasoning": result.get("reasoning", ""),
         "scored_by": "ai",
     }
 
@@ -238,3 +277,98 @@ def analyze_interaction(interaction_id: str) -> dict:
         raise HTTPException(status_code=500, detail="No se pudo guardar el score")
 
     return {**saved.data[0], "reasoning": result.get("reasoning", "")}
+
+
+# ---------------------------------------------------------------------------
+# SCORING AUTOMÁTICO (batch)
+# ---------------------------------------------------------------------------
+
+def _last_message(messages: list) -> dict | None:
+    if not messages:
+        return None
+    return sorted(messages, key=lambda m: m.get("sent_at", ""))[-1]
+
+
+def _whatsapp_session_ended(messages: list) -> bool:
+    """
+    Decide si una conversación de whatsapp ya terminó, SIN usar IA:
+      1. Nuestro shopper se despidió (última frase con palabra de cierre), o
+      2. Pasaron más de 4h desde el último mensaje (regla de seguridad).
+    """
+    last = _last_message(messages)
+    if not last:
+        return False
+
+    # Regla 1: el shopper cerró la conversación
+    if _normalize_role(last.get("role")) == "shopper":
+        content = (last.get("content") or "").lower()
+        if any(kw in content for kw in _FAREWELL_KEYWORDS):
+            return True
+
+    # Regla 2: timeout de 4h sin nada nuevo
+    ts = _parse_ts(last.get("sent_at", ""))
+    if ts:
+        age = (datetime.now(timezone.utc) - ts).total_seconds()
+        if age >= _WHATSAPP_TIMEOUT_SEC:
+            return True
+
+    return False
+
+
+def score_pending() -> dict:
+    """
+    Busca interacciones SIN score y evalúa las que ya estén listas:
+      - call:     lista si tiene un call_detail con transcript parseable.
+      - whatsapp: lista si la conversación ya terminó (_whatsapp_session_ended).
+    Si la empresa nunca respondió, guarda un score 0 SIN gastar IA.
+    """
+    scored_rows = supabase.table("interaction_scores").select("interaction_id").execute().data or []
+    scored_ids = {r["interaction_id"] for r in scored_rows}
+
+    interactions = supabase.table("interactions").select("*").execute().data or []
+    results = {"scored": [], "skipped": [], "errors": []}
+
+    for it in interactions:
+        iid = it["id"]
+        if iid in scored_ids:
+            continue
+
+        channel = it.get("channel")
+
+        if channel == "call":
+            cds = supabase.table("call_details").select("*").eq("interaction_id", iid).execute().data or []
+            has_transcript = any(parse_transcript(cd.get("transcript")) for cd in cds)
+            if not has_transcript:
+                results["skipped"].append({"id": iid, "reason": "llamada sin transcript aún"})
+                continue
+
+        elif channel == "whatsapp":
+            msgs = supabase.table("messages").select("*").eq("interaction_id", iid).execute().data or []
+            if not _whatsapp_session_ended(msgs):
+                results["skipped"].append({"id": iid, "reason": "conversación whatsapp aún activa"})
+                continue
+            # Sin respuesta de la empresa → score directo sin IA
+            if not any(_normalize_role(m.get("role")) == "company" for m in msgs):
+                supabase.table("interaction_scores").insert({
+                    "interaction_id": iid,
+                    "responded": False,
+                    "quality_score": 0,
+                    "scored_by": "auto",
+                }).execute()
+                supabase.table("interactions").update({"status": "no_answer"}).eq("id", iid).execute()
+                results["scored"].append({"id": iid, "quality_score": 0, "note": "sin respuesta (sin IA)"})
+                continue
+        else:
+            results["skipped"].append({"id": iid, "reason": f"canal no soportado: {channel}"})
+            continue
+
+        try:
+            score = analyze_interaction(iid)
+            supabase.table("interactions").update({"status": "answered"}).eq("id", iid).execute()
+            results["scored"].append({"id": iid, "quality_score": score.get("quality_score")})
+        except HTTPException as e:
+            results["errors"].append({"id": iid, "error": e.detail})
+        except Exception as e:
+            results["errors"].append({"id": iid, "error": str(e)})
+
+    return results

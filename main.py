@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from routers import companies, personas, campaigns, interactions, messages, reports, call_details, interaction_scores
+from routers import companies, campaigns, interactions, messages, reports, call_details, interaction_scores, webhooks, dashboard
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from utils import error_response
@@ -11,6 +11,11 @@ load_dotenv()
 
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
+# Scheduler: corre el scoring automático cada X minutos.
+# Apagado por default para no gastar IA mientras pruebas. Préndelo con ENABLE_SCHEDULER=true
+ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "false").lower() == "true"
+SCHEDULER_INTERVAL_MIN = int(os.getenv("SCHEDULER_INTERVAL_MIN", "10"))
 
 app = FastAPI(
     title="AuditBot API",
@@ -52,13 +57,39 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # --- Routers ---
 
 app.include_router(companies.router)
-app.include_router(personas.router)
 app.include_router(campaigns.router)
 app.include_router(interactions.router)
 app.include_router(messages.router)
 app.include_router(call_details.router)
 app.include_router(interaction_scores.router)
 app.include_router(reports.router)
+app.include_router(webhooks.router)
+app.include_router(dashboard.router)
+
+# --- Scheduler (scoring automático) ---
+
+if ENABLE_SCHEDULER:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    import services.ai_scoring as ai_scoring_service
+
+    scheduler = BackgroundScheduler(timezone="UTC")
+
+    @app.on_event("startup")
+    def _start_scheduler():
+        scheduler.add_job(
+            ai_scoring_service.score_pending,
+            "interval",
+            minutes=SCHEDULER_INTERVAL_MIN,
+            id="score_pending",
+            max_instances=1,   # no encimar corridas
+            coalesce=True,     # si se atrasa, una sola corrida
+        )
+        scheduler.start()
+        print(f"[scheduler] scoring automático activo cada {SCHEDULER_INTERVAL_MIN} min")
+
+    @app.on_event("shutdown")
+    def _stop_scheduler():
+        scheduler.shutdown(wait=False)
 
 @app.get("/")
 def read_root():
