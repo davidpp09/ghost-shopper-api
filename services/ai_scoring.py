@@ -43,7 +43,7 @@ def _normalize_role(role) -> str:
 
 
 _client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
-_MODEL = "llama-3.3-70b-versatile"
+_MODEL = "llama-3.1-8b-instant"
 
 _SYSTEM_PROMPT = """Eres un evaluador de mystery shopping (cliente incógnito).
 En la conversación hay dos participantes:
@@ -67,7 +67,7 @@ Devuelve ÚNICAMENTE este JSON:
   "did_followup": bool,
   "used_name": bool,
   "attempted_close": bool,
-  "quality_score": int,
+  "quality_score": int, // IMPORTANTE: Debe ser un número del 0 al 100
   "reasoning": string
 }"""
 
@@ -136,11 +136,11 @@ def _classify_response_time(sec: float) -> tuple[str, int]:
 def _build_timing_context(messages: list) -> tuple[str, int]:
     """
     Calcula tiempos de respuesta en código puro y devuelve (texto_para_prompt, penalización_total).
-    La penalización se aplica al quality_score antes de llamar a la IA,
-    así el modelo no necesita hacer matemáticas — solo leer el transcript.
+    Calcula tiempos de respuesta en código puro y devuelve (texto_para_prompt, penalización_total, avg_sec).
+    La penalización se aplica al quality_score antes de llamar a la IA.
     """
     if not messages:
-        return "", 0
+        return "", 0, None
 
     sorted_msgs = sorted(messages, key=lambda m: m.get("sent_at", ""))
 
@@ -161,7 +161,7 @@ def _build_timing_context(messages: list) -> tuple[str, int]:
                 break
 
     if not gaps:
-        return "", 0
+        return "", 0, None
 
     def fmt(sec: float) -> str:
         if sec < 60:
@@ -180,7 +180,7 @@ def _build_timing_context(messages: list) -> tuple[str, int]:
         f"(promedio: {fmt(avg_sec)}, máximo: {fmt(max_sec)}, "
         f"penalización ya aplicada al score: {total_penalty} pts)"
     )
-    return text, total_penalty
+    return text, total_penalty, avg_sec
 
 
 def analyze_interaction(interaction_id: str) -> dict:
@@ -233,7 +233,7 @@ def analyze_interaction(interaction_id: str) -> dict:
         )
 
     context_text = _build_context_text(interaction)
-    timing_text, timing_penalty = _build_timing_context(interaction.get("messages") or [])
+    timing_text, timing_penalty, avg_response_time = _build_timing_context(interaction.get("messages") or [])
 
     user_message = f"{context_text}\n\nTRANSCRIPCIÓN:\n{transcript_text}"
     if timing_text:
@@ -270,11 +270,26 @@ def analyze_interaction(interaction_id: str) -> dict:
         "quality_score": final_score,
         "reasoning": result.get("reasoning", ""),
         "scored_by": "ai",
+        "reasoning": result.get("reasoning", "")
     }
 
     saved = supabase.table("interaction_scores").insert(score_data).execute()
     if not saved.data:
         raise HTTPException(status_code=500, detail="No se pudo guardar el score")
+
+    # Marcar interacción como contestada/cerrada y guardar métricas de tiempo
+    try:
+        now = datetime.utcnow().isoformat() + "Z"
+        update_data = {
+            "status": "answered",
+            "responded_at": now
+        }
+        if avg_response_time is not None:
+            update_data["response_time_sec"] = int(avg_response_time)
+            
+        supabase.table("interactions").update(update_data).eq("id", interaction_id).execute()
+    except Exception as e:
+        print(f"Error marcando interacción como answered: {e}")
 
     return {**saved.data[0], "reasoning": result.get("reasoning", "")}
 
