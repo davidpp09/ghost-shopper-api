@@ -88,6 +88,18 @@ class CompanyResponse(CompanyCreate):
     id: UUID
     created_at: datetime
 
+# --- BOT ---
+class BotCallRequest(BaseModel):
+    phone: str = Field(..., min_length=1)
+    context: Optional[str] = None
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def valid_phone(cls, v):
+        if not re.match(r"^[\d\s\+\-\(\)]+$", str(v)):
+            raise ValueError("Solo se permiten números, +, -, espacios y paréntesis")
+        return v
+
 # --- CAMPAIGNS ---
 class CampaignCreate(BaseModel):
     company_id: UUID

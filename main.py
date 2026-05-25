@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from routers import companies, campaigns, interactions, messages, reports, call_details, interaction_scores, webhooks, dashboard, whatsapp
+from routers import companies, campaigns, interactions, messages, reports, call_details, interaction_scores, webhooks, dashboard, whatsapp, bot
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from utils import error_response
@@ -66,6 +66,7 @@ app.include_router(reports.router)
 app.include_router(webhooks.router)
 app.include_router(dashboard.router)
 app.include_router(whatsapp.router)
+app.include_router(bot.router)
 
 # --- Scheduler (scoring automático) ---
 
