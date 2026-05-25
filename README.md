@@ -1,155 +1,107 @@
 # 👻 Ghost Shopper
 
-> **LatAm GTM Hackathon — CDMX, Mayo 2026**  
-> *¿Cómo atiende tu inmobiliaria a un cliente que llama hoy? Lo sabemos en minutos.*
-
----
-
-## ¿Qué es?
-
-**Ghost Shopper** es un agente de IA que se hace pasar por un cliente potencial, llama a inmobiliarias de forma automática, y genera un reporte de qué tan bien (o mal) los atendieron.
-
-Sin visitantes misteriosos. Sin encuestas manuales. Sin sesgo humano.  
-Solo llamadas reales, análisis de IA y un score del 0 al 100.
+> **LatAm GTM Hackathon — CDMX, Mayo 2026**
 
 ---
 
 ## El problema
 
-Los equipos de ventas de inmobiliarias pierden deals todos los días por:
-- No contestar a tiempo
-- No dar precios cuando el cliente pregunta
-- No hacer seguimiento
-- No intentar cerrar
+Las inmobiliarias pierden deals todos los días sin saberlo.
 
-Nadie lo sabe porque **nadie lo mide**. Ghost Shopper lo mide.
+Un cliente llama, nadie contesta. O contestan pero no dan precio. O dan precio pero nunca hacen seguimiento. El gerente de ventas no lo sabe porque **nadie lo mide en tiempo real**.
+
+La única forma de saberlo hoy es contratar visitantes misteriosos o hacer llamadas manuales. Caro, lento, y no escala.
+
+---
+
+## La solución
+
+**Ghost Shopper** automatiza el mystery shopping de equipos de ventas.
+
+Llama a la empresa como un cliente real, graba la conversación, la analiza y genera un reporte con score y recomendaciones. Todo sin intervención humana. Todo en minutos.
+
+Un gerente de ventas puede auditar a su equipo el lunes por la mañana antes de que empiece el día.
 
 ---
 
 ## ¿Cómo funciona?
 
 ```
-Webscraper detecta inmobiliaria
-         ↓
-POST /bot/call  { phone, context }
-         ↓
-IA arma el perfil de la empresa
-         ↓
-ElevenLabs marca el número → suena el teléfono 📞
-         ↓
-El agente de voz conversa como cliente real
-         ↓
-Groq analiza la llamada con IA
-         ↓
-Score + reporte automático generado
+1. El webscraper detecta una inmobiliaria  →  extrae nombre + teléfono
+2. Manda el número a Ghost Shopper
+3. Ghost Shopper llama al número como cliente potencial (voz real, conversación real)
+4. Cuando termina la llamada, analiza la conversación
+5. Genera un score + reporte con fortalezas, debilidades y recomendaciones
+```
+
+Funciona también por WhatsApp.
+
+---
+
+## Lo que mide
+
+| Criterio | ¿Por qué importa? |
+|---|---|
+| ¿Contestaron? | El 30% de leads se pierden porque nadie contesta |
+| ¿Dieron precio? | Sin precio, el cliente se va con la competencia |
+| ¿Intentaron cerrar? | La mayoría de vendedores nunca pide el cierre |
+| ¿Hicieron seguimiento? | El 80% de ventas requieren 5+ contactos |
+| ¿Usaron el nombre? | Personalización básica que aumenta conversión |
+| Tiempo de respuesta | Cada hora que pasa, bajan las chances de cierre |
+
+El resultado es un **score de 0 a 100** con calificación **A–F** y un veredicto en lenguaje simple.
+
+---
+
+## Resultado de ejemplo
+
+```
+Score: 34 / 100   →   F
+
+✅ Respondieron la llamada
+❌ No dieron precio
+❌ No intentaron cerrar
+❌ No usaron el nombre del cliente
+
+Veredicto: "Atención reactiva — responden pero no venden."
+Oportunidad: "Dar precios proactivamente y proponer visita al inmueble."
 ```
 
 ---
 
-## Lo que evalúa la IA
+## Por qué importa para GTM
 
-| Criterio | Descripción |
-|---|---|
-| ✅ Respondieron | ¿Contestaron la llamada? |
-| 💰 Dieron precio | ¿Informaron el costo sin rodeos? |
-| 📅 Intentaron cerrar | ¿Propusieron agendar visita? |
-| 📞 Hicieron seguimiento | ¿Llamaron de vuelta? |
-| 🙋 Usaron el nombre | ¿Personalizaron la atención? |
-| ⏱️ Tiempo de respuesta | Penalización si tardaron más de 30 min |
-| 🏆 Score global | 0–100 con calificación A–F |
+- **Mueve pipeline**: detecta exactamente dónde se rompe el proceso de ventas
+- **Ahorra horas**: lo que antes tomaba semanas de observación, ahora tarda minutos
+- **Escala**: puede auditar 100 sucursales en el mismo tiempo que una
+- **Reutilizable**: corre automáticamente cada N días por campaña — no es un one-shot
 
 ---
 
 ## Stack
 
-| Capa | Tecnología |
+| | |
 |---|---|
 | API | FastAPI + Python |
-| Base de datos | Supabase (PostgreSQL) |
-| Voz / Llamadas | ElevenLabs Conversational AI + Twilio |
-| IA de análisis | Groq — llama-3.3-70b-versatile |
-| IA de extracción | Groq — llama-3.1-8b-instant |
+| Base de datos | Supabase |
+| Llamadas de voz | ElevenLabs + Twilio |
+| Análisis | Groq (llama-3.3-70b) |
 | Automatización | Make |
 | Deploy | Railway |
-
----
-
-## Endpoints principales
-
-```
-POST /bot/call                          → dispara todo el flujo con phone + context
-POST /interactions/                     → lanza llamada a campaña existente
-GET  /dashboard/summary                 → KPIs globales
-GET  /campaigns/{id}                    → detalle de campaña
-GET  /interactions/campaign/{id}        → interacciones + scores
-GET  /reports/campaign/{id}             → reporte IA con métricas
-POST /reports/generate/{campaign_id}    → genera reporte nuevo con IA
-PATCH /companies/{id}                   → actualiza datos de empresa
-```
-
-Documentación interactiva completa en `/docs`.
-
----
-
-## Ejemplo real
-
-**Input:**
-```bash
-POST /bot/call
-{
-  "phone": "+525529196649",
-  "context": "Inmobiliaria Residencial del Valle, depas en Roma Norte CDMX"
-}
-```
-
-**Output (después de la llamada):**
-```json
-{
-  "company_name": "Residencial del Valle",
-  "quality_score": 34,
-  "calificacion": "F",
-  "responded": true,
-  "gave_price": false,
-  "attempted_close": false,
-  "veredicto": "Atención reactiva: responden pero no venden.",
-  "oportunidad_principal": "Dar precios proactivamente y agendar visita.",
-  "reasoning": "La empresa contestó pero evadió dar precios y no intentó cerrar en ningún momento de la conversación."
-}
-```
 
 ---
 
 ## Correr localmente
 
 ```bash
-# 1. Clonar y entrar
 git clone https://github.com/davidpp09/ghost-shopper
 cd ghost-shopper
-
-# 2. Instalar dependencias
 pip install -r requirements.txt
-
-# 3. Configurar variables de entorno
-cp .env.example .env
-# → llenar SUPABASE_URL, SUPABASE_KEY, GROQ_API_KEY, ELEVENLABS_*
-
-# 4. Levantar
+cp .env.example .env   # llenar las keys
 uvicorn main:app --reload
 ```
 
----
-
-## Variables de entorno
-
-| Variable | Descripción |
-|---|---|
-| `SUPABASE_URL` | URL del proyecto Supabase |
-| `SUPABASE_KEY` | Service role key |
-| `GROQ_API_KEY` | API key de Groq |
-| `ELEVENLABS_API_KEY` | API key de ElevenLabs |
-| `ELEVENLABS_AGENT_ID` | ID del agente de voz |
-| `ELEVENLABS_PHONE_NUMBER_ID` | ID del número Twilio en ElevenLabs |
-| `ENABLE_SCHEDULER` | `true` para scoring automático cada 10 min |
+Ver doc completa de endpoints en `/docs`.
 
 ---
 
@@ -164,7 +116,3 @@ Construido en 24 horas en el **LatAm GTM Hackathon — CDMX 2026**
 | Tlahuel Mendez Samuel Oswaldo |
 | Peña Pedraza David |
 | Paolo Flores |
-
----
-
-*Hecho con 🌶️ en México*
