@@ -7,3 +7,5 @@ groq
 httpx
 elevenlabs
 apscheduler
+twilio
+python-multipart

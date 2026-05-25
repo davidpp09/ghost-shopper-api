@@ -168,7 +168,7 @@ class CallDetailResponse(CallDetailCreate):
 # --- MESSAGES ---
 class MessageCreate(BaseModel):
     interaction_id: UUID
-    role: Literal["agent", "user"]
+    role: Literal["bot", "human"]
     content: str = Field(..., min_length=1)
     channel: Optional[Literal["call", "whatsapp", "email"]] = None
     external_msg_id: Optional[str] = None
@@ -195,7 +195,7 @@ class InteractionScoreUpdate(BaseModel):
     did_followup: Optional[bool] = None
     used_name: Optional[bool] = None
     attempted_close: Optional[bool] = None
-    quality_score: Optional[int] = Field(None, ge=0, le=100)
+    quality_score: Optional[int] = Field(None, ge=0)
     scored_by: Optional[str] = None
 
 class InteractionScoreResponse(InteractionScoreCreate):
