@@ -116,3 +116,18 @@ Construido en 24 horas en el **LatAm GTM Hackathon — CDMX 2026**
 | Tlahuel Mendez Samuel Oswaldo |
 | Peña Pedraza David |
 | Paolo Flores |
+
+---
+
+## Agradecimientos
+
+Gracias a todos los que hicieron posible este hackathon en CDMX.
+
+**Organizadores**  
+[LatamBuilds](https://www.latambuilds.com) · [Makers Fellowship](https://makersfellowship.com) · [30X](https://30x.com) · Hack0 Community by Crafter Station
+
+**Sede**  
+[Tuhabi México](https://tuhabi.mx) — Paseo de la Reforma 333, CDMX
+
+**Stack que nos dieron para construir esto**  
+[ElevenLabs](https://elevenlabs.io) · [Supabase](https://supabase.com) · [Make](https://make.com) · [Groq](https://groq.com) · [Anthropic](https://anthropic.com) · [Cursor](https://cursor.com)
