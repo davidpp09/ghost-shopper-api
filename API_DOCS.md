@@ -162,6 +162,13 @@ Empresa + sus campañas anidadas.
 ```
 Solo `name` es obligatorio.
 
+#### `PATCH /companies/{company_id}`
+Actualiza solo los campos que mandes (los demás no se tocan).
+```json
+{ "phone": "+525512345678", "whatsapp_number": "+525512345678" }
+```
+Todos los campos son opcionales.
+
 ---
 
 ### 📋 CAMPAIGNS
@@ -305,6 +312,42 @@ Mensajes de WhatsApp ordenables por `sent_at`.
 
 ### 🔌 WEBHOOKS (interno — NO lo usa el front)
 `POST /webhooks/elevenlabs_post_call` — lo consume Make tras una llamada.
+
+---
+
+### 🤖 BOT (para el webscraper)
+
+#### `POST /bot/call`  → 201  ⭐ (todo en uno)
+Endpoint especializado para el webscraper. Con un solo POST crea la empresa, la campaña, la interacción y dispara la llamada automáticamente.
+
+**Body:**
+```json
+{
+  "phone": "+525512345678",
+  "context": "Inmobiliaria Residencial del Valle, venden depas en Roma Norte CDMX"
+}
+```
+Solo `phone` es obligatorio. `context` es texto libre — la IA extrae `name`, `industry`, `city` y `website` de ahí. Si no se manda `context`, el nombre de la empresa queda como `"Empresa-YYYYMMDD-HHMMSS"`.
+
+**Respuesta:**
+```json
+{
+  "company_id": "uuid...",
+  "company_name": "Residencial del Valle",
+  "campaign_id": "uuid...",
+  "interaction_id": "uuid...",
+  "conversation_id": "conv_...",
+  "status": "calling",
+  "to_number": "+525512345678"
+}
+```
+
+**Flujo interno:**
+1. Groq parsea el `context` y extrae datos de la empresa
+2. Crea la empresa en DB con `phone` + datos extraídos
+3. Crea una campaña activa con `channels: ["call", "whatsapp"]`
+4. Crea una interacción tipo `call`
+5. Dispara la llamada vía ElevenLabs → Twilio
 
 ---
 
